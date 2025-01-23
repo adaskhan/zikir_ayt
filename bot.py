@@ -7,8 +7,7 @@ import pytz
 
 from decouple import config
 
-from zikrs import list_of_zikr
-
+from zikrs import list_of_zikr, juma_zikr_info
 
 headers = {
     "accept": "application/json",
@@ -28,7 +27,7 @@ def send_message():
     now = datetime.now(timezone)
     current_hour = now.hour
 
-    if 8 <= current_hour < 23:
+    if 8 <= current_hour < 24:
         zikr_info = list_of_zikr[current_index]
 
         message_to_send = f"«{zikr_info['zikr']}»\n\n{zikr_info['translation']}\n\n📖 {zikr_info['source']}\n\nℹ️ {zikr_info['explanation']}"
@@ -46,7 +45,7 @@ def send_message():
         print(f"Сейчас {current_hour} часов, бот не отправляет сообщения в это время.")
 
 def send_juma_dua():
-    message_to_send = """**Жұма күнгі салауат**\n\nПайғамбарымыз Мұхаммед ﷺ былай деп айтты:\n"Кімде-кім жұма күні маған 80 рет салауат айтса, оның 80 жылдық күнәлары кешіріледі."\n\nЖұма күні **"Аллаһумма солли ‘алә Мухаммадин уә 'алә әли Мухаммад"** деп 80 рет айтыңыз."""
+    message_to_send = f"Жұма зікірі🕌\n«{juma_zikr_info['zikr']}»\n\n{juma_zikr_info['translation']}\n\nℹ️ {juma_zikr_info['explanation']}"
 
     payload = {
         "typing_time": 0,
@@ -56,17 +55,6 @@ def send_juma_dua():
     requests.post(url, json=payload, headers=headers)
     print(f"Отправлено Жұма дұғасы: {message_to_send}")
 
-
-def send_juma_dua_2():
-    message_to_send = """Жұма күні айтатын дұға\n\n"Әстағфируллаһәлләзи лә иләһә иллә һуәл хайюл қайиуму уә әтубу иләйһи" деп 3 рет айтыңыз.\n\nМағынасы:\n«Өзінен басқа ешбір тәңір болмаған, әрдайым тірі, әр нәрсені толық басқарып тұрушы Алладан күнәларыма кешірім сұраймын және Оған тәубе етемін»."""
-
-    payload = {
-        "typing_time": 0,
-        "to": channel_id,
-        "body": message_to_send
-    }
-    requests.post(url, json=payload, headers=headers)
-    print(f"Отправлено Жұма дұғасы: {message_to_send}")
 
 def check_and_send_juma_dua():
     now = datetime.now(timezone)
@@ -74,12 +62,8 @@ def check_and_send_juma_dua():
     current_minute = now.minute
     current_weekday = now.weekday()  # Понедельник = 0, Пятница = 4
 
-    # Если пятница и текущее время 10:00, отправить первую дуа
-    if current_weekday == 4 and current_hour == 10 and current_minute == 0:
-        send_juma_dua_2()
-
-    # Если пятница и текущее время 11:00, отправить вторую дуа
-    elif current_weekday == 4 and current_hour == 11 and current_minute == 0:
+    # Если пятница и текущее время 9:00, отправить вторую дуа
+    if current_weekday == 4 and current_hour == 9 and current_minute == 0:
         send_juma_dua()
 
 
