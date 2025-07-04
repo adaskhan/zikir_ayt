@@ -1,5 +1,5 @@
 import time
-from datetime import datetime, timedelta
+from datetime import datetime
 
 import requests
 import schedule
@@ -7,8 +7,7 @@ import pytz
 
 from decouple import config
 
-from zikrs import list_of_zikr, juma_zikr_info, suhur_dua, iftar_dua, tarauyh_dua
-from prayer_times import prayer_times
+from zikrs import list_of_zikr
 
 headers = {
     "accept": "application/json",
@@ -19,42 +18,37 @@ headers = {
 channel_id = config('CHANNEL_ID')
 url = config('API_URL')
 
-current_index = 0
-
 timezone = pytz.timezone('Asia/Aqtau')
 
-
-def base_send_message(message):
-    payload = {
-        "typing_time": 0,
-        "to": channel_id,
-        "body": message
-    }
-    requests.post(url, json=payload, headers=headers)
+current_index = {
+    "morning": 0,
+    "evening": 0,
+    "sleep": 0,
+    "anytime": 0
+}
 
 
 def send_message():
-    global current_index
     now = datetime.now(timezone)
-    current_hour = now.hour
+    hour = now.hour
 
-    if 8 <= current_hour < 24:
-        zikr_info = list_of_zikr[current_index]
+    if 8 <= hour < 10:
+        zikr_category = "morning"
+    elif 17 <= hour < 20:
+        zikr_category = "evening"
+    elif 20 <= hour < 22:
+        zikr_category = "sleep"
+    else:
+        zikr_category = "anytime"
 
-        message_to_send = f"«{zikr_info['zikr']}»\n\n{zikr_info['translation']}\n\n📖 {zikr_info['source']}\n\nℹ️ {zikr_info['explanation']}"
+    zikr_list = list_of_zikr[zikr_category]
 
-        payload = {
-            "typing_time": 0,
-            "to": channel_id,
-            "body": message_to_send
-        }
-        requests.post(url, json=payload, headers=headers)
+    index = current_index[zikr_category]
+    zikr_info = zikr_list[index]
 
-        current_index = (current_index + 1) % len(list_of_zikr)
-
-
-def send_juma_dua():
-    message_to_send = f"Жұма зікірі🕌\n«{juma_zikr_info['zikr']}»\n\n{juma_zikr_info['translation']}\n\nℹ️ {juma_zikr_info['explanation']}"
+    message_to_send = f"«{zikr_info['zikr']}»\n\n{zikr_info['translation']}"
+    if zikr_info['explanation']:
+        message_to_send += f"\n\nℹ️ {zikr_info['explanation']}"
 
     payload = {
         "typing_time": 0,
@@ -63,9 +57,13 @@ def send_juma_dua():
     }
     requests.post(url, json=payload, headers=headers)
 
+    current_index[zikr_category] = (index + 1) % len(zikr_list)
 
-def send_tarauyh_dua():
-    message_to_send = f"🤲 Тарауих намазының тәсбихы:\n{tarauyh_dua['dua']}\n\nℹ️ {tarauyh_dua['translation']}"
+
+def send_juma_dua():
+    juma_zikr = list_of_zikr["friday"][0]
+
+    message_to_send = f"Жұма зікірі🕌\n«{juma_zikr['zikr']}»\n\n{juma_zikr['translation']}\n\nℹ️ {juma_zikr['explanation']}"
 
     payload = {
         "typing_time": 0,
@@ -77,64 +75,13 @@ def send_tarauyh_dua():
 
 def check_and_send_juma_dua():
     now = datetime.now(timezone)
-    current_hour = now.hour
-    current_minute = now.minute
-    current_weekday = now.weekday()  # Понедельник = 0, Пятница = 4
-
-    # Если пятница и текущее время 9:00, отправить вторую дуа
-    if current_weekday == 4 and current_hour == 9 and current_minute == 0:
+    if now.weekday() == 4 and now.hour == 9 and now.minute == 0:
         send_juma_dua()
 
 
-def send_ramadan_dua():
-    today = datetime.now(timezone).day
-    month = datetime.now(timezone).month
-
-    if month == 3 and str(today) in prayer_times:
-        now = datetime.now(timezone)
-        suhur_time = timezone.localize(datetime.combine(now.date(), datetime.strptime(prayer_times[str(today)]["suhur"],
-                                                                                      "%H:%M").time())) - timedelta(minutes=5)
-        iftar_time = timezone.localize(datetime.combine(now.date(), datetime.strptime(prayer_times[str(today)]["iftar"],
-                                                                                      "%H:%M").time())) - timedelta(minutes=5)
-
-        zuhur_msg = f"🤲 Ауыз бекітерде оқылатын дұға:\n{suhur_dua['dua']}\n\nℹ️ {suhur_dua['translation']}"
-        iftar_msg = f"🤲 Ауызашарда оқылатын дұға:\n{iftar_dua['dua']}\n\nℹ️ {iftar_dua['translation']}"
-
-        schedule.every().day.at(suhur_time.strftime("%H:%M")).do(lambda: base_send_message(zuhur_msg))
-        schedule.every().day.at(iftar_time.strftime("%H:%M")).do(lambda: base_send_message(iftar_msg))
-
-
-def check_time_and_send_tarauyh_dua():
-    now = datetime.now(timezone)
-    current_hour = now.hour
-    current_minute = now.minute
-
-    if current_hour == 9 and current_minute == 0:
-        send_tarauyh_dua()
-
-
-def schedule_ramadan_tasks():
-    if datetime.now(timezone).month == 3:
-        schedule.every().minute.do(send_tarauyh_dua)
-        schedule.every().minute.do(check_time_and_send_tarauyh_dua)
-
-
-def schedule_ramadan_duas():
-    now = datetime.now(timezone)
-    if now.month == 3:  # Проверяем, идет ли Рамадан
-        send_ramadan_dua()  # Запускаем сразу при проверке
-
-
-# Запланировать проверку каждую минуту
 schedule.every().minute.do(check_and_send_juma_dua)
-
-schedule.every().hour.do(schedule_ramadan_tasks)
-
 schedule.every(30).minutes.do(send_message)
 
-schedule.every().day.at("00:01").do(schedule_ramadan_duas)
-
-schedule_ramadan_duas()
 
 while True:
     schedule.run_pending()
